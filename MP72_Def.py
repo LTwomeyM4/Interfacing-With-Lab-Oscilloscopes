@@ -1,3 +1,4 @@
+
 import time
 import json
 import io
@@ -12,7 +13,7 @@ class Scope_Control(object):
     def __init__(self):
 
         try:
-            self.MOD_NAME_STR = "MP72_Lib"
+            self.MOD_NAME_STR = "MP72_Def"
             self.FUNC_NAME = ".Scope_Control()" # use this in exception handling messages
             self.ERR_STATEMENT = "Error: " + self.MOD_NAME_STR + self.FUNC_NAME
 
@@ -23,25 +24,6 @@ class Scope_Control(object):
             self.EP_OUT = 0x03
 
             self.TIMEOUT_MS = 200
-
-            self.VERTICAL_SCALES = [
-                "5mV", "10mV", "20mV", "50mV",
-                "100mV", "200mV", "500mV",
-                "1V", "2V", "5V",
-            ]
-
-            self.TIMEBASES = [
-                ("2.0ns", 2e-9), ("5.0ns", 5e-9), ("10ns", 10e-9),
-                ("20ns", 20e-9), ("50ns", 50e-9),
-                ("100ns", 100e-9), ("200ns", 200e-9), ("500ns", 500e-9),
-                ("1.0us", 1e-6), ("2.0us", 2e-6), ("5.0us", 5e-6),
-                ("10us", 10e-6), ("20us", 20e-6), ("50us", 50e-6),
-                ("100us", 100e-6), ("200us", 200e-6), ("500us", 500e-6),
-                ("1.0ms", 1e-3), ("2.0ms", 2e-3), ("5.0ms", 5e-3),
-                ("10ms", 10e-3), ("20ms", 20e-3), ("50ms", 50e-3),
-                ("100ms", 100e-3), ("200ms", 200e-3), ("500ms", 500e-3),
-                ("1.0s", 1.0), ("2.0s", 2.0), ("5.0s", 5.0), ("10s", 10.0),
-            ]
 
             self.dev = usb.core.find(idVendor=self.VID, idProduct=self.PID)
             if self.dev is None:
@@ -182,8 +164,7 @@ class Scope_Control(object):
         # Creating empty arrays
         V_array_1 = []
         V_array_2 = []
-        fft_sig_1 = []
-        fft_sig_2 = []
+        Time_array = []
 
         # Commands to read head data
         self.write_cmd(':DATA:WAVE:SCREen:HEAD?')
@@ -284,7 +265,7 @@ class Scope_Control(object):
 
         
         # Creating data list
-        data_list = [metadata, Time_array, V_array_1, V_array_2 ,fft_sig_1, fft_sig_2]
+        data_list = [metadata, Time_array, V_array_1, V_array_2]
 
         return data_list
     
@@ -293,35 +274,38 @@ class Scope_Control(object):
         plt.style.use('dark_background')
 
         fig, ax1= plt.subplots()
-        # Skips plot if voltage array is empty (channel 1 not displayed)
-        if len(all_data[2]) == 0:
-            pass
-        else:
-            ax1.plot(all_data[1], all_data[2], color='y')
         ax1.grid(True)
         ax1.minorticks_on()
-        ax1.set_ylabel("Voltage CH1 (V)")
-        # Sets Vertical scale to match oscilloscope's scale
-        ax1.set_ylim(-4*self.parse_volts(all_data[0]['CHANNEL'][0]['SCALE']),
-                      4*self.parse_volts(all_data[0]['CHANNEL'][0]['SCALE']))
-
-        # Plot secoind channel on same plot with seperate axis
-        ax2 = ax1.twinx()
-        # Skips plot if voltage array is empty (channel 2 not displayed)
-        if len(all_data[3]) == 0:
-            pass
+        # Skips plot if voltage array is empty (channel 1 not displayed)
+        if len(all_data[2]) == 0 and len(all_data[3]) == 0:
+            print("Please turn on at least one channel display for a plot")
         else:
-            ax2.plot(all_data[1], all_data[3], color='b')
-        ax2.grid(True)
-        ax2.minorticks_on()
-        ax2.set_ylabel("Voltage CH2 (V)")
-        ax2.set_ylim(-4*self.parse_volts(all_data[0]['CHANNEL'][1]['SCALE']), 
-                      4*self.parse_volts(all_data[0]['CHANNEL'][1]['SCALE']))
+            if len(all_data[2]) == 0:
+                pass
+            else:
+                ax1.plot(all_data[1], all_data[2], color='y')
+                ax1.set_ylabel("Voltage CH1 (V)")
+                # Sets Vertical scale to match oscilloscope's scale
+                ax1.set_ylim(-4*self.parse_volts(all_data[0]['CHANNEL'][0]['SCALE']),
+                            4*self.parse_volts(all_data[0]['CHANNEL'][0]['SCALE']))
 
-        plt.title("Oscilloscope Screen Waveforms")
-        plt.xlabel("Time")
-        plt.savefig("Scope_Screen.png")
-        plt.show()
+            # Plot secoind channel on same plot with seperate axis
+            # Skips plot if voltage array is empty (channel 2 not displayed)
+            if len(all_data[3]) == 0:
+                pass
+            else:
+                ax2 = ax1.twinx()
+                ax2.plot(all_data[1], all_data[3], color='b')
+                ax2.grid(True)
+                ax2.minorticks_on()
+                ax2.set_ylabel("Voltage CH2 (V)")
+                ax2.set_ylim(-4*self.parse_volts(all_data[0]['CHANNEL'][1]['SCALE']), 
+                            4*self.parse_volts(all_data[0]['CHANNEL'][1]['SCALE']))
+
+            plt.title("Oscilloscope Screen Waveforms")
+            plt.xlabel("Time")
+            plt.savefig("Scope_Screen.png")
+            plt.show()
 
     def Read_plus_FFT(self, ch = 1, xlim = None):
         '''
@@ -368,45 +352,25 @@ class Scope_Control(object):
 
 
        
-    
-        if ch == 1 or ch == 2:
-            # try:
+        
+        if (ch == 1 and len(all_data[2]) != 0) or (ch == 2 and len(all_data[3]) != 0):
             N = numpy.size(all_data[1][:int(new_size)])
             '''
             This breaks below 5us. Must figure out why and change. 
             Something to do with sample rate not updating on screen?
+            Update: Fixed, better to take sample rate from time array. 
+                    Actual sample rate seems to be 1/5 of screen sample rate
             '''
             Sr = 0
-            if self.parse_time_str(all_data[0]['TIMEBASE']['SCALE']) >= 4.9e-6:
-                Sr = self.parse_sample_rate(all_data[0]["SAMPLE"]["SAMPLERATE"])
-            elif self.parse_time_str(all_data[0]['TIMEBASE']['SCALE']) >= 1.9e-6:
-                Sr = (5/2)*self.parse_sample_rate(all_data[0]["SAMPLE"]["SAMPLERATE"])
-            elif self.parse_time_str(all_data[0]['TIMEBASE']['SCALE']) >= 0.9e-6:
-                Sr = 2*(5/2)*self.parse_sample_rate(all_data[0]["SAMPLE"]["SAMPLERATE"])
-            elif self.parse_time_str(all_data[0]['TIMEBASE']['SCALE']) >= 4.9e-7:
-                Sr = (2**1)*(5/2)*self.parse_sample_rate(all_data[0]["SAMPLE"]["SAMPLERATE"])
-            elif self.parse_time_str(all_data[0]['TIMEBASE']['SCALE']) >= 1.9e-7:
-                Sr = (2**2)*((5/2)**2)*self.parse_sample_rate(all_data[0]["SAMPLE"]["SAMPLERATE"])
-            elif self.parse_time_str(all_data[0]['TIMEBASE']['SCALE']) >= 0.9e-7:
-                Sr = (2**2)*((5/2)**2)*self.parse_sample_rate(all_data[0]["SAMPLE"]["SAMPLERATE"])
-            elif self.parse_time_str(all_data[0]['TIMEBASE']['SCALE']) >= 4.9e-8:
-                Sr = (2**3)*((5/2)**2)*self.parse_sample_rate(all_data[0]["SAMPLE"]["SAMPLERATE"])
-            elif self.parse_time_str(all_data[0]['TIMEBASE']['SCALE']) >= 1.9e-8:
-                Sr = (2**3)*((5/2)**3)*self.parse_sample_rate(all_data[0]["SAMPLE"]["SAMPLERATE"])
-            elif self.parse_time_str(all_data[0]['TIMEBASE']['SCALE']) >= 0.9e-8:
-                Sr = (2**4)*((5/2)**3)*self.parse_sample_rate(all_data[0]["SAMPLE"]["SAMPLERATE"])
-            elif self.parse_time_str(all_data[0]['TIMEBASE']['SCALE']) >= 4.9e-9:
-                Sr = (2**5)*((5/2)**3)*self.parse_sample_rate(all_data[0]["SAMPLE"]["SAMPLERATE"])
-            else:
-                print("ERROR: Sample rate not recognised")
-
+            Sr = 1/((all_data[1][1]-all_data[1][0]))
+            print("Sample Rate: " + str(Sr) +  "S/s")
             freqs = numpy.fft.fftfreq(N, 1/(Sr))
             fft = numpy.fft.fft(all_data[ch + 1][:int(new_size)])
             positive_freqs = freqs[:N//2]
             positive_mag = numpy.abs(fft)[:N//2]
 
             # Plots only positive side of FFT
-            positive_freqs = freqs[:N//2]/5
+            positive_freqs = freqs[:N//2]
             positive_mag = numpy.abs(fft)[:N//2]
             plt.stem(positive_freqs, positive_mag, basefmt=" ", markerfmt=" ")
             plt.title(f"FFT of Signal on Channel {ch}")
@@ -420,10 +384,8 @@ class Scope_Control(object):
             numpy.savetxt('FFT_Data_Scope.txt', fft, fmt = '%0.4f', delimiter = '\t')
             fft_data = [fft, positive_freqs,  positive_mag]
             return fft_data
-            # except:
-            #     print(f"ERROR: Chosen Channel not displayed on Oscilloscope. Please turn on Channel {ch} display")
         else:
-            print("ERROR: Channel out of range, please chose channel 1 or 2")
+            print("ERROR: Channel out of range, please chose channel 1 or 2 and make sure they are being dispalyed")
             pass
 
 
